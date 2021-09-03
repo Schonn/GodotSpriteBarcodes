@@ -1,0 +1,14 @@
+[gd_scene load_steps=2 format=2]
+
+[ext_resource path="res://SpriteProcessing/BarcodeSpriteLoader.gd" type="Script" id=1]
+
+[node name="WorldLoad" type="Node2D"]
+position = Vector2( 0, -1.52588e-05 )
+script = ExtResource( 1 )
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2( 1.18933, 2.37836 )
+current = true
+zoom = Vector2( 2, 2 )
+
+[node name="Objects" type="Node2D" parent="."]
