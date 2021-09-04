@@ -1,7 +1,7 @@
 extends Sprite
 
-#what category number this image fits under
-var imageCategory = 0
+#what image variants this image can be switched to
+var acceptableImageVariants = []
 #array of ImageAttachPoints to be read from pixel data for each new image
 var attachmentPoints = []
 #origin point for image
@@ -12,9 +12,13 @@ var targetMovePoint = null
 var targetMovePointPrevious = null
 #next acceptable target move points
 var acceptableTargetMovePoints = []
+#image change data
+var imageLoadMethod = null
+var imageLoadElement = null
+var imageLoadType = null
 
 #pixel processing mode enumerators
-enum {PPNONE,PPATTACHPOINT,PPORIGINPOINT}
+enum {PPNONE,PPATTACHPOINT,PPORIGINPOINT,PPACCEPTVARIANTS}
 #attachment argument mode enumerators
 enum {AIMAGETYPES,AIMAGEVARIANTS,ANEIGHBORPOINTS}
 
@@ -37,6 +41,10 @@ func appendAllHexIfNotExisting(destinationArray,arrayToAppend):
 			destinationArray.append(arrayItem)
 
 func updateImage(newImage):
+	#clear children
+	for markedChild in self.get_children():
+		markedChild.queue_free()
+		self.remove_child(markedChild)
 	#clear attachment point data
 	self.attachmentPoints = []
 	#load image into node texture from argument
@@ -45,14 +53,16 @@ func updateImage(newImage):
 	var readPixelCopy = self.texture.get_data()
 	readPixelCopy.lock()
 	var readPixelHEX = splitHexToArray(readPixelCopy.get_pixel(0,0).to_html(false))
-	#signal to start reading pixel data
+	#signal for switching to next argument type while in a read mode
+	var nextArgumentSignal = "[99, 99, 99]"
+	#signal to start or stop reading pixel data
 	var dataSignal = "[98, 98, 98]"
 	#signal to read in the origin point from a pixel
 	var originPointSignal = "[97, 97, 97]"
-	#signal to read in a single attach point from a pixel
+	#signal to start reading in a single attach point from pixels
 	var attachPointSignal = "[96, 96, 96]"
-	#signal for switching to next argument type while in a read mode
-	var nextArgumentSignal = "[99, 99, 99]"
+	#signal to start reading in acceptable image variants
+	var acceptableVariantsSignal = "[95, 95, 95]"
 	if(checkSignalInPixel(readPixelHEX,dataSignal)):
 		readPixelHEX = []
 		var pixelReadHeight = 0
@@ -62,6 +72,7 @@ func updateImage(newImage):
 		#arrays for accumulating arguments
 		var attachPointArguments = []
 		var originPointArguments = []
+		var acceptedVariantArguments = []
 		#check all pixels until next occurrence of dataSignal
 		while(pixelReadHeight < readPixelCopy.get_height() and checkSignalInPixel(readPixelHEX,dataSignal) == false):
 			#if there is not currently a pixel read mode, look for a signal to switch to one
@@ -70,6 +81,8 @@ func updateImage(newImage):
 					 pixelReadMode = PPATTACHPOINT
 				elif(checkSignalInPixel(readPixelHEX,originPointSignal)):
 					 pixelReadMode = PPORIGINPOINT
+				elif(checkSignalInPixel(readPixelHEX,acceptableVariantsSignal)):
+					 pixelReadMode = PPACCEPTVARIANTS
 			else:
 				#capture data using current pixel read mode
 				#capture origin point data
@@ -85,6 +98,20 @@ func updateImage(newImage):
 						pixelReadMode = PPNONE
 					else:
 						originPointArguments.append(readPixelHEX)
+				#capture acceptable image variant data
+				if(pixelReadMode == PPACCEPTVARIANTS):
+					#second signal indicates end of input and time to gather and process origin point data
+					if(checkSignalInPixel(readPixelHEX,acceptableVariantsSignal)):
+						#read in r g b of any number of pixels as acceptable variants for this sprite to switch to
+						if(len(acceptedVariantArguments) > 0):
+							var acceptedVariantsList = []
+							for acceptedVariantIterator in range(0,len(acceptedVariantArguments)):
+								appendAllHexIfNotExisting(acceptedVariantsList,acceptedVariantArguments[acceptedVariantIterator])
+							self.acceptableImageVariants = acceptedVariantsList
+							acceptedVariantArguments = []
+							pixelReadMode = PPNONE
+					else:
+						acceptedVariantArguments.append(readPixelHEX)
 				#capture attach point data
 				if(pixelReadMode == PPATTACHPOINT):
 					#second signal indicates end of input and time to gather and process attachment point data
@@ -96,7 +123,7 @@ func updateImage(newImage):
 						#the first is accepted image types, the second is accepted variants of image type
 						#and the third is neigboring navigation points for if this is a navigation attachment point
 						if(len(attachPointArguments) > 2):
-							print("got attach point data")
+							#print("got attach point data")
 							#position variables
 							var positionX = round((attachPointArguments[0][0] * 0.01)*readPixelCopy.get_width())-self.originPoint[0]
 							var positionY = round((attachPointArguments[0][1] * 0.01)*readPixelCopy.get_height())-self.originPoint[1]
@@ -124,7 +151,7 @@ func updateImage(newImage):
 									appendAllHexIfNotExisting(navNeighborsList,attachPointArguments[acceptedTypeVariantIterator])
 							#set up point using data read in from pixels
 							var newAttachPoint = ImageAttachPoint.new()
-							newAttachPoint.setupPoint([positionX, positionY], pointTypeNumber, acceptedTypesList, relativeLayer, acceptedVariantsList,navNeighborsList)
+							newAttachPoint.setupPoint([positionX, positionY], [scaleX, scaleY], pointTypeNumber, acceptedTypesList, relativeLayer, acceptedVariantsList,navNeighborsList)
 							attachmentPoints.append(newAttachPoint)
 						attachPointArguments = []
 						pixelReadMode = PPNONE

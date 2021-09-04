@@ -22,11 +22,12 @@ var createdObject = false
 #for navigation attach points, the list of navigation points that can be moved to from this point
 var neigborNavPoints = []
 
-func setupPoint(attachXY,attachTypeNumber,acceptedCategoriesList,relativeAttachLayer,acceptedVariantsList,neighborNavigationPoints):
+func setupPoint(attachXY,attachScaleXY,attachTypeNumber,acceptedCategoriesList,relativeAttachLayer,acceptedVariantsList,neighborNavigationPoints):
 	self.attachTypeEnum = attachTypeNumber
 	self.acceptedCategories = acceptedCategoriesList
 	self.attachPosition = attachXY
 	self.attachLayer = relativeAttachLayer
 	self.acceptedVariants = acceptedVariantsList
 	self.neigborNavPoints = neighborNavigationPoints
+	self.attachScale = attachScaleXY
 	#print("point type number is " + str(self.attachTypeEnum) + ", categories are " + str(self.acceptedCategories) + ", accepted variants are " + str(self.acceptedVariants) + ", attach layer is " + str(self.attachLayer) + " and position is " + str(self.attachPosition))

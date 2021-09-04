@@ -26,17 +26,19 @@ func getDirectoryContentsList(checkFolder,getFolderBool):
 		return finalItemList
 
 #move an object to an attachment point while respecting origin points
-func moveWithOriginPoints(targetOffset,targetLayer,movingObject):
+func moveWithOriginPoints(targetOffset,targetScale,targetLayer,movingObject):
 	var interpPosition = lerp(movingObject.get("position"), Vector2(targetOffset[0], targetOffset[1]), 0.1)
+	var interpScale = lerp(movingObject.get("scale"), Vector2(targetScale[0], targetScale[1]), 0.3)
 	movingObject.set("position",Vector2(interpPosition[0],interpPosition[1]))
+	movingObject.set("scale",Vector2(interpScale[0],interpScale[1]))
 	if(movingObject.z_index != targetLayer):
 		movingObject.z_index = targetLayer
 	return(movingObject.get("position").distance_to(Vector2(targetOffset[0],targetOffset[1])) > 0.5)
 
-#load image element matching acceptable type criteria
-func loadNewElement(elementType,parentObject,parentLocation,parentScale,parentLayerOffset,acceptableTypes,acceptableVariants,elementOverride):
+#load choose type and variant for a new image or image change
+func chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,elementOverride,typeOverride):
 	var loadDirectory = "Images/Objects"
-	if(elementType == LOBACKGROUND):
+	if(loadMethodSwitch == LOBACKGROUND):
 		loadDirectory = "Images/Backgrounds"
 	var chosenElement = elementOverride
 	if(chosenElement == null):
@@ -44,29 +46,57 @@ func loadNewElement(elementType,parentObject,parentLocation,parentScale,parentLa
 		chosenElement = allElementsList[randi() % allElementsList.size()]
 	var allTypesList = getDirectoryContentsList(loadDirectory + "/" + chosenElement,true)
 	#print(allTypesList)
-	#if no preferred types specified, accept any
-	var chosenType = acceptableTypes[randi() % acceptableTypes.size()]
-	if(len(acceptableTypes) == 0):
-		chosenType = allTypesList[randi() % allTypesList.size()]
+	#choose type from override, acceptable types list or any available
+	var chosenType = typeOverride
+	if(chosenType == null):
+		if(len(acceptableTypes) == 0):
+			chosenType = allTypesList[randi() % allTypesList.size()]
+		else:
+			chosenType = acceptableTypes[randi() % acceptableTypes.size()]
 	#print("chosen type is " + str(chosenType))
 	if(str(chosenType) in allTypesList):
 		var variantImageList = getDirectoryContentsList(loadDirectory + "/" + chosenElement  + "/" + str(chosenType),false)
 		#print(variantImageList)
-		var chosenVariant = str(acceptableVariants[randi() % acceptableVariants.size()]) + ".png"
-		if(len(acceptableVariants) == 0):
-			chosenVariant = variantImageList[randi() % variantImageList.size()]
+		var chosenVariant = str(variantImageList[randi() % variantImageList.size()])
+		if(len(acceptableVariants) > 0):
+			chosenVariant = str(acceptableVariants[randi() % acceptableVariants.size()]) + ".png"
+		#fall back to image list if choice from acceptable variants isn't working
+		if(((chosenVariant in variantImageList) == false) and (len(variantImageList) > 0)):
+			chosenVariant = str(variantImageList[randi() % variantImageList.size()])
 		#print("chosen variant is " + str(chosenVariant))
 		if(chosenVariant in variantImageList):
-			var imageInstance = load("SpriteProcessing/ContextImage.tscn").instance()
-			imageInstance.updateImage(loadDirectory + "/" + chosenElement + "/" + str(chosenType) + "/" + chosenVariant)
-			imageInstance.name = chosenElement + "_" + str(chosenType) + "_" + chosenVariant.replace(".png","")
-			parentObject.add_child(imageInstance)
-			imageInstance.offset = Vector2(-imageInstance.originPoint[0],-imageInstance.originPoint[1])
-			imageInstance.set("position",Vector2(parentLocation[0],parentLocation[1]))
-			imageInstance.set("scale",Vector2(parentScale[0],parentScale[1]))
-			imageInstance.z_index = parentLayerOffset
-			print(imageInstance.name)
-			return imageInstance
+			return([loadDirectory,chosenElement,chosenType,chosenVariant])
+		else:
+			return null
+		
+
+func updateContextImageData(imageInstance,loadDirectory,chosenElement,chosenType,chosenVariant,parentLocation,parentScale,parentLayerOffset,loadMethodSwitch):
+	imageInstance.updateImage(loadDirectory + "/" + chosenElement + "/" + str(chosenType) + "/" + chosenVariant)
+	imageInstance.name = chosenElement + "_" + str(chosenType) + "_" + chosenVariant.replace(".png","")
+	imageInstance.offset = Vector2(-imageInstance.originPoint[0],-imageInstance.originPoint[1])
+	imageInstance.set("position",Vector2(parentLocation[0],parentLocation[1]))
+	imageInstance.set("scale",Vector2(parentScale[0],parentScale[1]))
+	imageInstance.z_index = parentLayerOffset
+	imageInstance.imageLoadMethod = loadMethodSwitch
+	imageInstance.imageLoadElement = chosenElement
+	imageInstance.imageLoadType = chosenType
+	return imageInstance
+
+#function for creating a new image attached to a parent image
+func createNewImageInParent(loadMethodSwitch,parentObject,parentLocation,parentScale,parentLayerOffset,acceptableTypes,acceptableVariants):
+	var directoryElementTypeVariant = chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,null,null)
+	if(directoryElementTypeVariant != null):
+		var imageInstance = load("SpriteProcessing/ContextImage.tscn").instance()
+		parentObject.add_child(imageInstance)
+		updateContextImageData(imageInstance,directoryElementTypeVariant[0],directoryElementTypeVariant[1],directoryElementTypeVariant[2],directoryElementTypeVariant[3],parentLocation,parentScale,parentLayerOffset,loadMethodSwitch)
+		#print(imageInstance.name)
+		return imageInstance
+		
+#function for updating an existing image
+func updateElementImage(updateTarget):
+	var directoryElementTypeVariant = chooseTypeAndVariant(updateTarget.imageLoadMethod,[],updateTarget.acceptableImageVariants,updateTarget.imageLoadElement,updateTarget.imageLoadType)
+	if(directoryElementTypeVariant != null):
+		updateContextImageData(updateTarget,directoryElementTypeVariant[0],directoryElementTypeVariant[1],directoryElementTypeVariant[2],directoryElementTypeVariant[3],updateTarget.get("position"),updateTarget.get("scale"),updateTarget.z_index,updateTarget.imageLoadMethod)
 
 #iterate to a maximum number, returning when a wrap occurs
 func wrapIteration(iterator,iterationMax):
@@ -81,16 +111,16 @@ func _ready():
 	randomize()
 	randomNumberGenerate = RandomNumberGenerator.new()
 	randomNumberGenerate.randomize()
-	loadNewElement(LOBACKGROUND,self.get_node("Objects"),[0,0],[1,1],0,[0],[0],null)
+	createNewImageInParent(LOBACKGROUND,self.get_node("Objects"),[0,0],[1,1],0,[0],[0])
 	iterationObjectNode = self.get_node("Objects")
 	
 #load objects into attachments, following attach type rules
 func loadObjectsToAttachments(attachPoint,parentObject):
 	if(attachPoint.attachedObject == null):
 		if(attachPoint.attachTypeEnum == 0):
-			attachPoint.attachedObject = loadNewElement(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants,null)
+			attachPoint.attachedObject = createNewImageInParent(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants)
 		if(attachPoint.attachTypeEnum == 1 and attachPoint.createdObject == false):
-			attachPoint.attachedObject = loadNewElement(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants,null)
+			attachPoint.attachedObject = createNewImageInParent(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants)
 
 #recursively load objects into attachments where applicable
 func recursiveObjectLoad(targetObject):
@@ -102,6 +132,25 @@ func recursiveObjectLoad(targetObject):
 			if(childObject.attachmentPoints.size() > 0):
 				print("recursive load")
 				recursiveObjectLoad(targetObject)
+
+#movement between attachment points
+func attachPointMovement(movingObject,parentObject):
+	if(movingObject.targetMovePoint == null):
+		var randomNavPointNumber = randi() % parentObject.attachmentPoints.size()
+		var randomNavPoint = parentObject.attachmentPoints[randomNavPointNumber]
+		if(randomNavPoint.attachTypeEnum == 2 and randomNavPoint.attachedObject == null):
+			if((len(movingObject.acceptableTargetMovePoints) == 0) or ((randomNavPointNumber in movingObject.acceptableTargetMovePoints) == true)):
+				randomNavPoint.attachedObject = movingObject
+				movingObject.targetMovePointPrevious = movingObject.targetMovePoint
+				movingObject.targetMovePoint = randomNavPoint
+				movingObject.acceptableTargetMovePoints = randomNavPoint.neigborNavPoints
+	else:
+		#if there is hardly any distance left to move, pick a new navigation target
+		if(moveWithOriginPoints(movingObject.targetMovePoint.attachPosition,movingObject.targetMovePoint.attachScale,movingObject.targetMovePoint.attachLayer,movingObject) == false):
+			#but also randomly don't pick a target
+			if(randi() % 30 == 1):
+				movingObject.targetMovePoint.attachedObject = null
+				movingObject.targetMovePoint = null
 
 #process loaded images
 func _process(delta):
@@ -116,22 +165,10 @@ func _process(delta):
 		if(backgroundObject.get_child_count() > 0):
 			var layerTwoObject = backgroundObject.get_child(layerTwoIteration)
 			#movement for the layer two object
-			if(layerTwoObject.targetMovePoint == null):
-				var randomNavPointNumber = randi() % backgroundObject.attachmentPoints.size()
-				var randomNavPoint = backgroundObject.attachmentPoints[randomNavPointNumber]
-				if(randomNavPoint.attachTypeEnum == 2 and randomNavPoint.attachedObject == null):
-					if((len(layerTwoObject.acceptableTargetMovePoints) == 0) or ((randomNavPointNumber in layerTwoObject.acceptableTargetMovePoints) == true)):
-						randomNavPoint.attachedObject = layerTwoObject
-						layerTwoObject.targetMovePointPrevious = layerTwoObject.targetMovePoint
-						layerTwoObject.targetMovePoint = randomNavPoint
-						layerTwoObject.acceptableTargetMovePoints = randomNavPoint.neigborNavPoints
-			else:
-				#if there is hardly any distance left to move, pick a new navigation target
-				if(moveWithOriginPoints(layerTwoObject.targetMovePoint.attachPosition,layerTwoObject.targetMovePoint.attachLayer,layerTwoObject) == false):
-					#but also randomly don't pick a target
-					if(randi() % 50 == 1):
-						layerTwoObject.targetMovePoint.attachedObject = null
-						layerTwoObject.targetMovePoint = null
+			attachPointMovement(layerTwoObject,backgroundObject)
+			#image changes for the layer two object
+			if(randi() % 10 == 1):
+				updateElementImage(layerTwoObject)
 			#object loading for the layer two object
 			recursiveObjectLoad(layerTwoObject)
 			#if elements have been loaded in to iteration object, process those elements
