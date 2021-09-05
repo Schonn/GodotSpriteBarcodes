@@ -21,8 +21,10 @@ var attachedObject = null
 var createdObject = false
 #for navigation attach points, the list of navigation points that can be moved to from this point
 var neigborNavPoints = []
+#how fast to move to this point if it is a nav point
+var navMoveSpeed = 0.1
 
-func setupPoint(attachXY,attachScaleXY,attachTypeNumber,acceptedCategoriesList,relativeAttachLayer,acceptedVariantsList,neighborNavigationPoints):
+func setupPoint(attachXY,attachScaleXY,attachTypeNumber,acceptedCategoriesList,relativeAttachLayer,acceptedVariantsList,neighborNavigationPoints,navigationSpeed):
 	self.attachTypeEnum = attachTypeNumber
 	self.acceptedCategories = acceptedCategoriesList
 	self.attachPosition = attachXY
@@ -30,4 +32,5 @@ func setupPoint(attachXY,attachScaleXY,attachTypeNumber,acceptedCategoriesList,r
 	self.acceptedVariants = acceptedVariantsList
 	self.neigborNavPoints = neighborNavigationPoints
 	self.attachScale = attachScaleXY
+	self.navMoveSpeed = navigationSpeed
 	#print("point type number is " + str(self.attachTypeEnum) + ", categories are " + str(self.acceptedCategories) + ", accepted variants are " + str(self.acceptedVariants) + ", attach layer is " + str(self.attachLayer) + " and position is " + str(self.attachPosition))

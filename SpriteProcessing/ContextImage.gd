@@ -16,11 +16,31 @@ var acceptableTargetMovePoints = []
 var imageLoadMethod = null
 var imageLoadElement = null
 var imageLoadType = null
+#how to handle being unparented
+#0 is remove self, 1 is go back to previous parent
+var unparentResponseType = 0
+#the object that this object was previously parented to if reparented
+var previousParent = null
+
+#function to handle being unparented
+func unparentResponse():
+	#0 is remove self, 1 is go back to previous parent or to the current grandparent
+	#if the parent is a background (it has load method 0) and it has changed, always remove self
+	if(unparentResponseType == 0 or get_parent().imageLoadMethod == 0):
+		self.queue_free()
+	else:
+		if(previousParent == null):
+			var grandParent = get_parent().get_parent()
+			get_parent().remove_child(self)
+			grandParent.add_child(self)
+		else:
+			get_parent().remove_child(self)
+			previousParent.add_child(self)
 
 #pixel processing mode enumerators
 enum {PPNONE,PPATTACHPOINT,PPORIGINPOINT,PPACCEPTVARIANTS}
 #attachment argument mode enumerators
-enum {AIMAGETYPES,AIMAGEVARIANTS,ANEIGHBORPOINTS}
+enum {AIMAGETYPES,AIMAGEVARIANTS,ANEIGHBORPOINTS,AMOVESPEED}
 
 #round pixel data for reading rgb as 0 to 100
 func roundPixelData(pixelRGB):
@@ -43,8 +63,7 @@ func appendAllHexIfNotExisting(destinationArray,arrayToAppend):
 func updateImage(newImage):
 	#clear children
 	for markedChild in self.get_children():
-		markedChild.queue_free()
-		self.remove_child(markedChild)
+		markedChild.unparentResponse()
 	#clear attachment point data
 	self.attachmentPoints = []
 	#load image into node texture from argument
@@ -90,10 +109,12 @@ func updateImage(newImage):
 					#second signal indicates end of input and time to gather and process origin point data
 					if(checkSignalInPixel(readPixelHEX,originPointSignal)):
 						#set origin point from pixel, where R and G are X and Y as a percent of image size
+						#also set unparent response type from B where 0 is remove self and 1 or other is unparent
 						if(len(originPointArguments) > 0):
 							var positionX = round((originPointArguments[0][0] * 0.01)*readPixelCopy.get_width())
 							var positionY = round((originPointArguments[0][1] * 0.01)*readPixelCopy.get_height())
 							self.originPoint = [positionX,positionY]
+							self.unparentResponseType = originPointArguments[0][2]
 						originPointArguments = []
 						pixelReadMode = PPNONE
 					else:
@@ -139,6 +160,7 @@ func updateImage(newImage):
 							var acceptedVariantsList = []
 							var navNeighborsList = []
 							var attachReadStage = AIMAGETYPES
+							var navigationSpeed = 0.1
 							for acceptedTypeVariantIterator in range(2,len(attachPointArguments)):
 								#read for delimiter and change type, variant or neigbor navigation read mode
 								if(checkSignalInPixel(attachPointArguments[acceptedTypeVariantIterator],nextArgumentSignal)):
@@ -149,9 +171,11 @@ func updateImage(newImage):
 									appendAllHexIfNotExisting(acceptedVariantsList,attachPointArguments[acceptedTypeVariantIterator])
 								elif(attachReadStage == ANEIGHBORPOINTS):
 									appendAllHexIfNotExisting(navNeighborsList,attachPointArguments[acceptedTypeVariantIterator])
+								elif(attachReadStage == AMOVESPEED):
+									navigationSpeed = (attachPointArguments[acceptedTypeVariantIterator][0])*0.01
 							#set up point using data read in from pixels
 							var newAttachPoint = ImageAttachPoint.new()
-							newAttachPoint.setupPoint([positionX, positionY], [scaleX, scaleY], pointTypeNumber, acceptedTypesList, relativeLayer, acceptedVariantsList,navNeighborsList)
+							newAttachPoint.setupPoint([positionX, positionY], [scaleX, scaleY], pointTypeNumber, acceptedTypesList, relativeLayer, acceptedVariantsList,navNeighborsList,navigationSpeed)
 							attachmentPoints.append(newAttachPoint)
 						attachPointArguments = []
 						pixelReadMode = PPNONE

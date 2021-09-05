@@ -26,14 +26,14 @@ func getDirectoryContentsList(checkFolder,getFolderBool):
 		return finalItemList
 
 #move an object to an attachment point while respecting origin points
-func moveWithOriginPoints(targetOffset,targetScale,targetLayer,movingObject):
-	var interpPosition = lerp(movingObject.get("position"), Vector2(targetOffset[0], targetOffset[1]), 0.1)
+func moveWithOriginPoints(targetOffset,targetScale,targetSpeed,targetLayer,movingObject):
+	var interpPosition = lerp(movingObject.get("position"), Vector2(targetOffset[0], targetOffset[1]), targetSpeed)
 	var interpScale = lerp(movingObject.get("scale"), Vector2(targetScale[0], targetScale[1]), 0.3)
 	movingObject.set("position",Vector2(interpPosition[0],interpPosition[1]))
 	movingObject.set("scale",Vector2(interpScale[0],interpScale[1]))
 	if(movingObject.z_index != targetLayer):
 		movingObject.z_index = targetLayer
-	return(movingObject.get("position").distance_to(Vector2(targetOffset[0],targetOffset[1])) > 0.5)
+	return(movingObject.get("position").distance_to(Vector2(targetOffset[0],targetOffset[1])) > 0.2)
 
 #load choose type and variant for a new image or image change
 func chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,elementOverride,typeOverride):
@@ -146,8 +146,8 @@ func attachPointMovement(movingObject,parentObject):
 				movingObject.acceptableTargetMovePoints = randomNavPoint.neigborNavPoints
 	else:
 		#if there is hardly any distance left to move, pick a new navigation target
-		if(moveWithOriginPoints(movingObject.targetMovePoint.attachPosition,movingObject.targetMovePoint.attachScale,movingObject.targetMovePoint.attachLayer,movingObject) == false):
-			#but also randomly don't pick a target
+		if(moveWithOriginPoints(movingObject.targetMovePoint.attachPosition,movingObject.targetMovePoint.attachScale,movingObject.targetMovePoint.navMoveSpeed,movingObject.targetMovePoint.attachLayer,movingObject) == false):
+			#chance of not picking a target
 			if(randi() % 30 == 1):
 				movingObject.targetMovePoint.attachedObject = null
 				movingObject.targetMovePoint = null
