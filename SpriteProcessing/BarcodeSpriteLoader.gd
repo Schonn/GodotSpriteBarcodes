@@ -83,8 +83,8 @@ func updateContextImageData(imageInstance,loadDirectory,chosenElement,chosenType
 	return imageInstance
 
 #function for creating a new image attached to a parent image
-func createNewImageInParent(loadMethodSwitch,parentObject,parentLocation,parentScale,parentLayerOffset,acceptableTypes,acceptableVariants):
-	var directoryElementTypeVariant = chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,null,null)
+func createNewImageInParent(loadMethodSwitch,parentObject,parentLocation,parentScale,parentLayerOffset,acceptableTypes,acceptableVariants,elementOverride):
+	var directoryElementTypeVariant = chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,elementOverride,null)
 	if(directoryElementTypeVariant != null):
 		var imageInstance = load("SpriteProcessing/ContextImage.tscn").instance()
 		parentObject.add_child(imageInstance)
@@ -111,22 +111,22 @@ func _ready():
 	randomize()
 	randomNumberGenerate = RandomNumberGenerator.new()
 	randomNumberGenerate.randomize()
-	createNewImageInParent(LOBACKGROUND,self.get_node("Objects"),[0,0],[1,1],0,[0],[0])
+	createNewImageInParent(LOBACKGROUND,self.get_node("Objects"),[0,0],[1,1],0,[0],[0],null)
 	iterationObjectNode = self.get_node("Objects")
 	
 #load objects into attachments, following attach type rules
-func loadObjectsToAttachments(attachPoint,parentObject):
+func loadObjectsToAttachments(attachPoint,parentObject,elementOverride):
 	if(attachPoint.attachedObject == null):
 		if(attachPoint.attachTypeEnum == 0):
-			attachPoint.attachedObject = createNewImageInParent(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants)
+			attachPoint.attachedObject = createNewImageInParent(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants,elementOverride)
 		if(attachPoint.attachTypeEnum == 1 and attachPoint.createdObject == false):
-			attachPoint.attachedObject = createNewImageInParent(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants)
+			attachPoint.attachedObject = createNewImageInParent(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants,elementOverride)
 
 #recursively load objects into attachments where applicable
 func recursiveObjectLoad(targetObject):
 	if(targetObject.attachmentPoints.size() > 0):
 		for attachPoint in targetObject.attachmentPoints:
-			loadObjectsToAttachments(attachPoint,targetObject)
+			loadObjectsToAttachments(attachPoint,targetObject,targetObject.imageLoadElement)
 	if(targetObject.get_child_count() > 0):
 		for childObject in targetObject.get_children():
 			if(childObject.attachmentPoints.size() > 0):
@@ -160,7 +160,7 @@ func _process(delta):
 		if(backgroundObject.attachmentPoints.size() > 0):
 			#load elements in to background
 			for attachPoint in backgroundObject.attachmentPoints:
-				loadObjectsToAttachments(attachPoint,backgroundObject)
+				loadObjectsToAttachments(attachPoint,backgroundObject,null)
 		#if elements have been loaded in to background, process loaded elements
 		if(backgroundObject.get_child_count() > 0):
 			var layerTwoObject = backgroundObject.get_child(layerTwoIteration)
