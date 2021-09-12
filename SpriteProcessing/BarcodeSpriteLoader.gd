@@ -36,7 +36,7 @@ func moveWithOriginPoints(targetOffset,targetScale,targetSpeed,targetLayer,movin
 	return(movingObject.get("position").distance_to(Vector2(targetOffset[0],targetOffset[1])) > 0.2)
 
 #load choose type and variant for a new image or image change
-func chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,elementOverride,typeOverride):
+func chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,elementOverride,typeOverride,variantFilterDictionary):
 	var loadDirectory = "Images/Objects"
 	if(loadMethodSwitch == LOBACKGROUND):
 		loadDirectory = "Images/Backgrounds"
@@ -55,12 +55,31 @@ func chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,el
 			chosenType = acceptableTypes[randi() % acceptableTypes.size()]
 	#print("chosen type is " + str(chosenType))
 	if(str(chosenType) in allTypesList):
+		#get all available variants
 		var variantImageList = getDirectoryContentsList(loadDirectory + "/" + chosenElement  + "/" + str(chosenType),false)
 		#print(variantImageList)
-		var chosenVariant = str(variantImageList[randi() % variantImageList.size()])
-		if(len(acceptableVariants) > 0):
-			chosenVariant = str(acceptableVariants[randi() % acceptableVariants.size()]) + ".png"
-		#fall back to image list if choice from acceptable variants isn't working
+		var chosenVariant = null
+		#try to get filtered list of acceptable variants from any previous load of this image 
+		#this is stored and retrieved from 'root parent' using rootImage and variantChoiceFilterLists dictionary
+		var filteredAcceptableVariants = []
+		if(variantFilterDictionary != null):
+			if((str(chosenElement) + str(chosenType)) in variantFilterDictionary):
+				#get the filter list of variants from the root image dictionary for the chosen combination of element and type
+				var variantFilterList = variantFilterDictionary[(str(chosenElement) + str(chosenType))]
+				if(len(variantFilterList) > 0 and len(acceptableVariants) > 0):
+					for variantNumber in variantFilterList:
+						#if the variant for the image animation sequence would fit on the parent, add it to the filtered list
+						if(variantNumber in acceptableVariants):
+							filteredAcceptableVariants.append(variantNumber)
+		#if no filter could be made from matching parent acceptable variants with animation sequence acceptable variants
+		#then only use the parent acceptable variants and forget the animation sequence
+		if(len(filteredAcceptableVariants) == 0):
+			filteredAcceptableVariants = acceptableVariants
+		#try to pick a variant from the final list
+		if(len(filteredAcceptableVariants) > 0): 
+			chosenVariant = str(filteredAcceptableVariants[randi() % filteredAcceptableVariants.size()]) + ".png"
+		#if the variant has gone through all filters but is for an image that does not exist,
+		#then fall back to picking a random variation from the type
 		if(((chosenVariant in variantImageList) == false) and (len(variantImageList) > 0)):
 			chosenVariant = str(variantImageList[randi() % variantImageList.size()])
 		#print("chosen variant is " + str(chosenVariant))
@@ -72,7 +91,7 @@ func chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,el
 
 func updateContextImageData(imageInstance,loadDirectory,chosenElement,chosenType,chosenVariant,parentLocation,parentScale,parentLayerOffset,loadMethodSwitch):
 	imageInstance.updateImage(loadDirectory + "/" + chosenElement + "/" + str(chosenType) + "/" + chosenVariant)
-	imageInstance.name = chosenElement + "_" + str(chosenType) + "_" + chosenVariant.replace(".png","")
+	imageInstance.name = chosenElement + "_" + str(chosenType) + "_" + chosenVariant.replace(".png","") + "_" + str(randi() % 100)
 	imageInstance.offset = Vector2(-imageInstance.originPoint[0],-imageInstance.originPoint[1])
 	imageInstance.set("position",Vector2(parentLocation[0],parentLocation[1]))
 	imageInstance.set("scale",Vector2(parentScale[0],parentScale[1]))
@@ -80,21 +99,26 @@ func updateContextImageData(imageInstance,loadDirectory,chosenElement,chosenType
 	imageInstance.imageLoadMethod = loadMethodSwitch
 	imageInstance.imageLoadElement = chosenElement
 	imageInstance.imageLoadType = chosenType
+	#send the list of images that this image could switch to for animation sequences to the 'root' object, either self or a parent
+	imageInstance.rootImage.variantChoiceFilterLists[str(chosenElement) + str(chosenType)] = imageInstance.acceptableImageVariants
 	return imageInstance
 
 #function for creating a new image attached to a parent image
-func createNewImageInParent(loadMethodSwitch,parentObject,parentLocation,parentScale,parentLayerOffset,acceptableTypes,acceptableVariants,elementOverride):
-	var directoryElementTypeVariant = chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,elementOverride,null)
+func createNewImageInParent(loadMethodSwitch,parentObject,parentLocation,parentScale,parentLayerOffset,acceptableTypes,acceptableVariants,elementOverride,imageIsRoot):
+	var directoryElementTypeVariant = chooseTypeAndVariant(loadMethodSwitch,acceptableTypes,acceptableVariants,elementOverride,null,null)
 	if(directoryElementTypeVariant != null):
 		var imageInstance = load("SpriteProcessing/ContextImage.tscn").instance()
 		parentObject.add_child(imageInstance)
 		updateContextImageData(imageInstance,directoryElementTypeVariant[0],directoryElementTypeVariant[1],directoryElementTypeVariant[2],directoryElementTypeVariant[3],parentLocation,parentScale,parentLayerOffset,loadMethodSwitch)
+		#if not meant to be the root image, then get the real root image from the parent
+		if(imageIsRoot == false):
+			imageInstance.rootImage = parentObject.rootImage
 		#print(imageInstance.name)
 		return imageInstance
 		
 #function for updating an existing image
 func updateElementImage(updateTarget):
-	var directoryElementTypeVariant = chooseTypeAndVariant(updateTarget.imageLoadMethod,[],updateTarget.acceptableImageVariants,updateTarget.imageLoadElement,updateTarget.imageLoadType)
+	var directoryElementTypeVariant = chooseTypeAndVariant(updateTarget.imageLoadMethod,[],updateTarget.acceptableImageVariants,updateTarget.imageLoadElement,updateTarget.imageLoadType,updateTarget.rootImage.variantChoiceFilterLists)
 	if(directoryElementTypeVariant != null):
 		updateContextImageData(updateTarget,directoryElementTypeVariant[0],directoryElementTypeVariant[1],directoryElementTypeVariant[2],directoryElementTypeVariant[3],updateTarget.get("position"),updateTarget.get("scale"),updateTarget.z_index,updateTarget.imageLoadMethod)
 
@@ -111,22 +135,22 @@ func _ready():
 	randomize()
 	randomNumberGenerate = RandomNumberGenerator.new()
 	randomNumberGenerate.randomize()
-	createNewImageInParent(LOBACKGROUND,self.get_node("Objects"),[0,0],[1,1],0,[0],[0],null)
+	createNewImageInParent(LOBACKGROUND,self.get_node("Objects"),[0,0],[1,1],0,[0],[0],null,true)
 	iterationObjectNode = self.get_node("Objects")
 	
 #load objects into attachments, following attach type rules
-func loadObjectsToAttachments(attachPoint,parentObject,elementOverride):
+func loadObjectsToAttachments(attachPoint,parentObject,elementOverride,imagesAreOwnRoots):
 	if(attachPoint.attachedObject == null):
 		if(attachPoint.attachTypeEnum == 0):
-			attachPoint.attachedObject = createNewImageInParent(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants,elementOverride)
+			attachPoint.attachedObject = createNewImageInParent(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants,elementOverride,imagesAreOwnRoots)
 		if(attachPoint.attachTypeEnum == 1 and attachPoint.createdObject == false):
-			attachPoint.attachedObject = createNewImageInParent(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants,elementOverride)
+			attachPoint.attachedObject = createNewImageInParent(LOOBJECT,parentObject,attachPoint.attachPosition,attachPoint.attachScale,attachPoint.attachLayer,attachPoint.acceptedCategories,attachPoint.acceptedVariants,elementOverride,imagesAreOwnRoots)
 
 #recursively load objects into attachments where applicable
 func recursiveObjectLoad(targetObject):
 	if(targetObject.attachmentPoints.size() > 0):
 		for attachPoint in targetObject.attachmentPoints:
-			loadObjectsToAttachments(attachPoint,targetObject,targetObject.imageLoadElement)
+			loadObjectsToAttachments(attachPoint,targetObject,targetObject.imageLoadElement,false)
 	if(targetObject.get_child_count() > 0):
 		for childObject in targetObject.get_children():
 			if(childObject.attachmentPoints.size() > 0):
@@ -158,9 +182,9 @@ func _process(delta):
 	if(iterationObjectNode.get_child_count() > 0):
 		var backgroundObject = iterationObjectNode.get_child(layerOneIteration)
 		if(backgroundObject.attachmentPoints.size() > 0):
-			#load elements in to background
+			#load elements in to background, each image will be its own root image
 			for attachPoint in backgroundObject.attachmentPoints:
-				loadObjectsToAttachments(attachPoint,backgroundObject,null)
+				loadObjectsToAttachments(attachPoint,backgroundObject,null,true)
 		#if elements have been loaded in to background, process loaded elements
 		if(backgroundObject.get_child_count() > 0):
 			var layerTwoObject = backgroundObject.get_child(layerTwoIteration)

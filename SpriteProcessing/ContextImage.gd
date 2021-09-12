@@ -1,6 +1,6 @@
 extends Sprite
 
-#what image variants this image can be switched to
+#what image variants this image can be switched to, for animation sequences
 var acceptableImageVariants = []
 #array of ImageAttachPoints to be read from pixel data for each new image
 var attachmentPoints = []
@@ -21,6 +21,11 @@ var imageLoadType = null
 var unparentResponseType = 0
 #the object that this object was previously parented to if reparented
 var previousParent = null
+#the contextimage that represents the root for this contextimage, if self then this is the root contextimage
+var rootImage = null
+#if rootImage is self, this dictionary will store the ideal image variant lists for an image sequence change for a particular type
+#using string keys made from concatenated element and type
+var variantChoiceFilterLists = {}
 
 #function to handle being unparented
 func unparentResponse():
@@ -29,13 +34,15 @@ func unparentResponse():
 	if(unparentResponseType == 0 or get_parent().imageLoadMethod == 0):
 		self.queue_free()
 	else:
+		#remove self from parent and reparent to parent or grandparent, make sure to copy root image as well.
+		get_parent().remove_child(self)
 		if(previousParent == null):
 			var grandParent = get_parent().get_parent()
-			get_parent().remove_child(self)
 			grandParent.add_child(self)
+			self.rootImage = grandParent.rootImage
 		else:
-			get_parent().remove_child(self)
 			previousParent.add_child(self)
+			self.rootImage = previousParent.rootImage
 
 #pixel processing mode enumerators
 enum {PPNONE,PPATTACHPOINT,PPORIGINPOINT,PPACCEPTVARIANTS}
@@ -61,6 +68,9 @@ func appendAllHexIfNotExisting(destinationArray,arrayToAppend):
 			destinationArray.append(arrayItem)
 
 func updateImage(newImage):
+	#default root image to self if not already parented with a root image
+	if(self.rootImage == null):
+		self.rootImage = self
 	#clear children
 	for markedChild in self.get_children():
 		markedChild.unparentResponse()
